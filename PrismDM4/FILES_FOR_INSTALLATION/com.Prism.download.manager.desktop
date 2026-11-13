@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.1
+Type=Application
+Name=Prism
+Comment=Download Manager
+Icon=/usr/share/PrismDM4/icons/com.Prism.download.manager.svg
+Path=/usr/share/PrismDM4
+Exec=/usr/bin/prism_installed.sh
+Categories=Web;
+Keywords=Dowloader;Web;Download;
