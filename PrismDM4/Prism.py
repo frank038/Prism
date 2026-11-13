@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "0.1.0 alpha"
+VERSION = "0.2.0 alpha"
 ENAME = "Prism"
 ESITE = "https://github.com/frank038/Prism"
 
@@ -299,6 +299,7 @@ def set_curl(_data):
     _redir = _data[1]
     _speed = _data[2]
     _signal = _data[3]
+    file_path = _data[4]
     _cancel = 0
     def signal_threadslot_c(_sign, _param):
         _list = _signal.propList[0]
@@ -309,8 +310,8 @@ def set_curl(_data):
             return 1
     _signal.connect("notify::propList", signal_threadslot_c)
     # 
-    filename = url.split("/")[-1].strip()
-    filepath = os.path.join(dest_dir,filename)
+    # filename = url.split("/")[-1].strip()
+    # filepath = os.path.join(dest_dir,filename)
     #
     # c.setopt(pycurl.CONNECTTIMEOUT, 30)
     c.setopt(pycurl.URL, url)
@@ -322,19 +323,19 @@ def set_curl(_data):
     c.setopt(pycurl.HTTPHEADER, custom_headers)
     #
     # Setup writing
-    if os.path.exists(filepath):
-        f = open(filepath, "ab")
-        c.setopt(pycurl.RESUME_FROM, os.path.getsize(filepath))
-        # c.setopt(pycurl.RESUME_FROM_LARGE, os.path.getsize(filepath))
+    if os.path.exists(file_path):
+        f = open(file_path, "ab")
+        c.setopt(pycurl.RESUME_FROM, os.path.getsize(file_path))
+        # c.setopt(pycurl.RESUME_FROM_LARGE, os.path.getsize(file_path))
     else:
-        f = open(filepath, "wb")
+        f = open(file_path, "wb")
     #
     c.setopt(pycurl.WRITEDATA, f)
     c.setopt(c.CAINFO, certifi.where())
     c.setopt(pycurl.NOPROGRESS, 0)
     #
     def progress(total, existing, upload_t, upload_d):
-        existing = os.path.getsize(filepath)
+        existing = os.path.getsize(file_path)
         try:
             frac = float(existing)/float(total)
         except:
@@ -348,7 +349,7 @@ def set_curl(_data):
     # 
     try:
         c.perform()
-        _signal.propList = ["TERMINATED",[os.path.getsize(filepath)]]
+        _signal.propList = ["TERMINATED",[os.path.getsize(file_path)]]
         c.close()
         return
     except pycurl.error as e:
@@ -472,10 +473,29 @@ class MainWindow(Adw.ApplicationWindow):
         _redir = _list[1][1]
         _speed = _list[1][2]
         file_path = _list[1][3]
-        self.add_new_download(_URI, _redir, _speed, file_path)
+        try:
+            # with open(DOWNLOADS_LIST, "a") as _f:
+                # _f.write(_URI+"\n"+_path+"\n"+"{}\n".format(_speed))
+            if self._realname != None:# or self._realname != "":
+                n_file_path = os.path.join(dest_dir, self._realname)
+            else:
+                n_file_path = os.path.join(dest_dir, os.path.basename(_URI))
+            with open(DOWNLOADS_LIST, "a") as _f:
+                _f.write(_URI+"\n"+n_file_path+"\n"+"{}\n".format(_speed))
+            self._list.append(_URI+"\n")
+            self._list.append(n_file_path+"\n")
+            self._list.append(str(_speed)+"\n")
+            self.add_new_download(_URI, _redir, _speed, file_path)
+        except Exception as E:
+            pass
+        # self.add_new_download(_URI, _redir, _speed, file_path)
         
     def get_real_filename(self, _signal,_param):
         self._realname = _signal.propName
+        if self._realname[0] == '"':
+            self._realname = self._realname[1:]
+        if self._realname[-1] == '"':
+            self._realname = self._realname[:-1]
         
     def get_real_filesize(self, _signal,_param):
         self._realsize = _signal.propInt
@@ -537,7 +557,7 @@ class MainWindow(Adw.ApplicationWindow):
                         # _app.send_notification(None, on_send_notification(_lang.COPYABORTED, os.path.basename(_URI)))
             _signal = SignalObject()
             _signal.connect("notify::propList", signal_threadslot)
-            _thread = GLib.Thread.new(None, set_curl, [_URI, _redir, _speed, _signal])
+            _thread = GLib.Thread.new(None, set_curl, [_URI, _redir, _speed, _signal, _path])
             _w._thread = _thread
             _w.set_label(_lang.STOP)
             _w._state = 1
@@ -576,11 +596,11 @@ class MainWindow(Adw.ApplicationWindow):
         
     # 3a1
     def on_btn_remove(self, _w, _ba):
-        YNDial(self, _lang.QREMOVE, os.path.basename(_ba._btn._uri), ["remove", _ba])
+        YNDial(self, _lang.QREMOVE, os.path.basename(_ba._btn._path), ["remove", _ba])
     
     # 3a2
     def on_btn_delete(self, _w, _ba):
-        YNDial(self, _lang.QDELETE, os.path.basename(_ba._btn._uri), ["delete", _ba])
+        YNDial(self, _lang.QDELETE, os.path.basename(_ba._btn._path), ["delete", _ba])
     
     # 3a3 - callback of on_btn_remove and on_btn_delete
     def dialog_action(self, _obj, _res, _data=None):
@@ -623,7 +643,8 @@ class MainWindow(Adw.ApplicationWindow):
         # remove only the file
         if _action == "delete":
             try:
-                os.unlink(os.path.join(dest_dir, os.path.basename(action_button._uri)))
+                # os.unlink(os.path.join(dest_dir, os.path.basename(action_button._uri)))
+                os.unlink(action_button._path)
                 action_button.set_sensitive(True)
                 action_button._completed = 0
                 action_button._lbl.set_label("-/-")
@@ -637,22 +658,33 @@ class MainWindow(Adw.ApplicationWindow):
                 return
     
     # 3b. create the entry in the listbox
-    def create_entry(self, _URL, _redir, _speed):
+    def create_entry(self, _URL, _redir, _speed, file_path=None):
         _URI = urllib.parse.unquote(_URL, encoding='utf-8')
         _ba = Gtk.Box.new(Gtk.Orientation.VERTICAL,0)
         _ba._redir = _redir
         _ba._speed = _speed
         _ba._url = _URI
         #
-        _name = os.path.basename(_URI)
-        #
         real_path = ""
-        if self._realname != None:# or self._realname != "":
-            real_path = os.path.join(dest_dir, self._realname)
-            _name = self._realname
-            self._realname = None # reset
+        if file_path != None:
+            real_path = file_path
+            _name = os.path.basename(real_path)
         else:
-            real_path = os.path.join(dest_dir, _name)
+            if self._realname != None:
+                _name = self._realname
+                real_path = os.path.join(dest_dir, _name)
+            else:
+                _name = os.path.basename(_URI)
+                real_path = os.path.join(dest_dir, _name)
+        # _name = os.path.basename(_URI)
+        # #
+        # real_path = ""
+        # if self._realname != None:# or self._realname != "":
+            # real_path = os.path.join(dest_dir, self._realname)
+            # _name = self._realname
+            # self._realname = None # reset
+        # else:
+            # real_path = os.path.join(dest_dir, _name)
         _ba._path = real_path # the full file path in which the downloaded item will be written
         #
         real_size = 0
@@ -762,7 +794,7 @@ class MainWindow(Adw.ApplicationWindow):
     # file_path is not None if there is a previous interrupted download
     def add_new_download(self, _URI, _redir, _speed, file_path=None):
         # create the new entry
-        wdg = self.create_entry(_URI, _redir, _speed)
+        wdg = self.create_entry(_URI, _redir, _speed, file_path)
         self.listbox.append(wdg)
         # set the label size for existing files
         if file_path != None and os.path.exists(file_path):
@@ -786,7 +818,7 @@ class MainWindow(Adw.ApplicationWindow):
                     continue
                 # self.get_file_data([file_uri, 5, _speed, self._signalm, file_path])
                 self.add_new_download(file_uri, 5, _speed, file_path)
-        except:
+        except Exception as E:
             pass
     
     # 2a. get the real file name and size before executing everything else
@@ -802,35 +834,37 @@ class MainWindow(Adw.ApplicationWindow):
         _URI = _buffer.get_text()
         if _URI == "":
             return
-        _URI = urllib.parse.unquote(_URI)
+        _URI = urllib.parse.unquote(_URI, encoding='utf-8')
         # check the list when trying to add a new download - skip if exists
         for i in range(0,len(self._list),3):
             file_uri = self._list[i].strip("\n")
             file_path = self._list[i+1].strip("\n")
             # _speed = int(self._list[i+2].strip("\n"))
-            if file_uri == _URI and file_path == os.path.join(dest_dir, os.path.basename(_URI)):
+            if file_uri == _URI:# and file_path == os.path.join(dest_dir, os.path.basename(_URI)):
                 AlDial(self_main, _lang.FALREADYDOWNLOAD)
                 return
         # 
-        self.get_file_data([_buffer.get_text(), 5, _speed, self._signalm, None])
+        self.get_file_data([_URI, 5, _speed, self._signalm, None])
+        ############################
+        # # # see on_get_data_last
+        # # self.add_new_download(_URI, _redir, _speed)
         #
-        # # see on_get_data_last
-        # self.add_new_download(_URI, _redir, _speed)
+        # _path = os.path.join(dest_dir, os.path.basename(_URI))
         #
-        _path = os.path.join(dest_dir, os.path.basename(_URI))
-        #
-        try:
-            with open(DOWNLOADS_LIST, "a") as _f:
-                _f.write(_URI+"\n"+_path+"\n"+"{}\n".format(_speed))
-            if self._realname != None:# or self._realname != "":
-                n_file_path = os.path.join(dest_dir, self._realname)
-            else:
-                n_file_path = os.path.join(dest_dir, os.path.basename(_URI))
-            self._list.append(_URI+"\n")
-            self._list.append(n_file_path+"\n")
-            self._list.append(str(_speed)+"\n")
-        except Exception as E:
-            pass
+        # try:
+            # # with open(DOWNLOADS_LIST, "a") as _f:
+                # # _f.write(_URI+"\n"+_path+"\n"+"{}\n".format(_speed))
+            # if self._realname != None:# or self._realname != "":
+                # n_file_path = os.path.join(dest_dir, self._realname)
+            # else:
+                # n_file_path = os.path.join(dest_dir, os.path.basename(_URI))
+            # with open(DOWNLOADS_LIST, "a") as _f:
+                # _f.write(_URI+"\n"+n_file_path+"\n"+"{}\n".format(_speed))
+            # self._list.append(_URI+"\n")
+            # self._list.append(n_file_path+"\n")
+            # self._list.append(str(_speed)+"\n")
+        # except Exception as E:
+            # pass
         
     # 1. dialog for getting the url
     def on_new_action_added(self, action, param=None):
