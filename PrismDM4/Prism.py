@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "0.2.0 alpha"
+VERSION = "0.2.1 alpha"
 ENAME = "Prism"
 ESITE = "https://github.com/frank038/Prism"
 
@@ -463,7 +463,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._signalm.connect("notify::propName", self.get_real_filename)
         self._signalm.connect("notify::propInt", self.get_real_filesize)
         self._signalm.connect("notify::propList", self.on_get_data_last)
-        
+    
     # the initial searching of data is finished
     def on_get_data_last(self, _signal,_param):
         # [url, redirect, speed, file_path]
@@ -741,6 +741,10 @@ class MainWindow(Adw.ApplicationWindow):
             _size = os.path.getsize(real_path)
             action_button._downloaded = _size # the size of the downloaded piece of the file
         #
+        folder_btn = Gtk.Button.new()
+        folder_btn.set_icon_name("folder-symbolic")
+        folder_btn.connect("clicked", self.show_in_filemanager, real_path)
+        box_sfx.append(folder_btn)
         ### redirections and speed
         row_box = Gtk.Box.new(Gtk.Orientation.HORIZONTAL,4)
         action_row.add_row(row_box)
@@ -773,13 +777,13 @@ class MainWindow(Adw.ApplicationWindow):
         row_box.append(spn_btn2)
         ###
         btn_remove = Gtk.Button.new()
-        btn_remove.set_icon_name("remove")
+        btn_remove.set_icon_name("remove-symbolic")
         btn_remove.connect("clicked", self.on_btn_remove, _ba)
         btn_remove.set_tooltip_text(_lang.REMOVE)
         action_row.add_prefix(btn_remove)
         #
         btn_delete = Gtk.Button.new()
-        btn_delete.set_icon_name("delete")
+        btn_delete.set_icon_name("delete-symbolic")
         btn_delete.connect("clicked", self.on_btn_delete,  _ba)
         btn_delete.set_tooltip_text(_lang.DELETE)
         action_row.add_prefix(btn_delete)
@@ -789,6 +793,22 @@ class MainWindow(Adw.ApplicationWindow):
         self._realsize = 0
         #
         return _ba
+    
+    # show the file manager
+    # 3b. related
+    def show_in_filemanager(self, _w, real_path):
+        # if not os.path.exists(real_path):
+            # _path = os.path.basename(real_path)
+        # else:
+            # _path = real_path
+        launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(dest_dir or GLib.get_home_dir()))
+        #
+        def _done(launcher, result, _data = None):
+           try:
+               launcher.launch_finish(result)
+           except GLib.Error as e:
+               AlDial(self_main, e.message)
+        launcher.launch(self_main, None, _done)
     
     # 3a. add the entry and execute the download
     # file_path is not None if there is a previous interrupted download
