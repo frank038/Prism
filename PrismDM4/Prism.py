@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "0.3.0 alpha"
+VERSION = "0.3.1 alpha"
 ENAME = "Prism"
 ESITE = "https://github.com/frank038/Prism"
 
@@ -433,6 +433,7 @@ class createEntry(Gtk.Box):
         self._count = _count # this name as number
         self._realname = None
         self._realsize = 0
+        self._existing = 0
         ########
         self._signalm = SignalObject()
         self._signalm.connect("notify::propName", self.get_real_filename)
@@ -503,6 +504,12 @@ class createEntry(Gtk.Box):
                 _signal.propList = ["COPY_ABORT",[_w._thread,self._count]]
                 pass
         elif _w._state == 0: # start the download
+            if os.path.exists(self.file_path):
+                try:
+                    self._existing = os.path.getsize(self.file_path)
+                except:
+                    pass
+            #
             _action = _w._row
             _URI = _w._uri
             _speed = _w._speed
@@ -516,15 +523,18 @@ class createEntry(Gtk.Box):
                     _w._state = 0
                     _w._thread = None
                     if os.path.exists(_path):
-                        _size = os.path.getsize(_path)
-                        _w._lbl.set_label("{} {}".format(convert_size(_size), _lang.COPYERROR))
+                        try:
+                            _size = os.path.getsize(_path)
+                            _w._lbl.set_label("{} {}".format(convert_size(_size), _lang.COPYERROR))
+                        except:
+                            _w._lbl.set_label(_lang.COPYERROR)
                     else:
                         _w._lbl.set_label(_lang.COPYERROR)
                     if on_send_notification:
                         _app.send_notification(None, on_send_notification(_lang.COPYERROR, os.path.basename(_URI)))
                 elif _list[0] == "COPY" and _list[1][2] == self._count:
-                    _size_all = _list[1][0]
-                    _size_tmp = _list[1][1]
+                    _size_all = _list[1][0] + self._existing # total
+                    _size_tmp = _list[1][1]  + self._existing # partial
                     GLib.idle_add(self.set_copy_lbl, _w, _size_all, _size_tmp)
                 elif _list[0] == "TERMINATED" and _list[1][1] == self._count:
                     _w.set_label(_lang.START)
@@ -916,7 +926,6 @@ class createEntry(Gtk.Box):
         c.setopt(pycurl.NOPROGRESS, 0)
         #
         def progress(total, existing, upload_t, upload_d):
-            existing = os.path.getsize(file_path)
             try:
                 frac = float(existing)/float(total)
             except:
