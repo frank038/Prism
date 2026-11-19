@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-VERSION = "0.3.1 alpha"
+VERSION = "0.4.0 alpha"
 ENAME = "Prism"
 ESITE = "https://github.com/frank038/Prism"
 
@@ -308,7 +308,7 @@ class MainWindow(Adw.ApplicationWindow):
         _URI = _buffer.get_text()
         if _URI == "":
             return
-        _URI = str(urllib.parse.unquote(_URI, encoding='utf-8'))
+        # _URI = str(urllib.parse.unquote(_URI, encoding='utf-8'))
         # check the list when trying to add a new download - skip if exists
         file_path = None
         for i in range(0,len(self._list),3):
@@ -466,7 +466,7 @@ class createEntry(Gtk.Box):
         _list = _signal.propList[0]
         # for new downloads
         _URI_tmp = _list[1][0]
-        _URI = urllib.parse.unquote(_URI_tmp, encoding='utf-8')
+        _URI = _URI_tmp # urllib.parse.unquote(_URI_tmp, encoding='utf-8')
         _redir = _list[1][1]
         _speed = _list[1][2]
         file_path = _list[1][3]
@@ -504,7 +504,7 @@ class createEntry(Gtk.Box):
                 _signal.propList = ["COPY_ABORT",[_w._thread,self._count]]
                 pass
         elif _w._state == 0: # start the download
-            if os.path.exists(self.file_path):
+            if self.file_path and os.path.exists(self.file_path):
                 try:
                     self._existing = os.path.getsize(self.file_path)
                 except:
@@ -617,7 +617,7 @@ class createEntry(Gtk.Box):
         if _action in ["remove", "delete"]:
             if action_button._state == 1:
                 return
-            # else:
+        #
         if _action == "remove":
             # remove from the list
             # _URL = _ba._url
@@ -653,6 +653,7 @@ class createEntry(Gtk.Box):
                 action_button._lbl.set_label("-/-")
                 # change the file state
                 self.set_terminated_mark(action_button, 0)
+                self._existing = 0
                 #
                 if not os.path.exists(os.path.join(dest_dir, os.path.basename(action_button._uri))):
                     AlDial(self_main, _lang.REMOVED)
@@ -925,12 +926,16 @@ class createEntry(Gtk.Box):
         c.setopt(c.CAINFO, certifi.where())
         c.setopt(pycurl.NOPROGRESS, 0)
         #
+        self.count_i = 0
         def progress(total, existing, upload_t, upload_d):
             try:
                 frac = float(existing)/float(total)
             except:
                 frac = 0
-            _signal.propList = ["COPY",[total,existing,d_count]]
+            self.count_i += 1
+            if self.count_i == 300:
+                _signal.propList = ["COPY",[total,existing,d_count]]
+                self.count_i = 0
             return self.t_cancel
         #
         c.setopt(c.NOPROGRESS, False)
